@@ -1,0 +1,86 @@
+name: Test basic x64 (default)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Ensure PowerShell is available
+        run: |
+          if command -v pwsh &>/dev/null; then
+            echo "pwsh already available: $(pwsh --version)"
+          else
+            echo "Installing PowerShell..."
+            UBUNTU_VERSION=$(lsb_release -rs 2>/dev/null || echo "22.04")
+            wget -q "https://packages.microsoft.com/config/ubuntu/${UBUNTU_VERSION}/packages-microsoft-prod.deb" \
+              -O /tmp/packages-microsoft-prod.deb
+            sudo dpkg -i /tmp/packages-microsoft-prod.deb
+            sudo apt-get update -q
+            sudo apt-get install -yq powershell
+            echo "Installed: $(pwsh --version)"
+          fi
+
+      - id: action
+        uses: .
+        with:
+          platform: x64
+          cc: '1'
+
+      - name: Assert gcc output
+        env:
+          GCC: ${{ steps.action.outputs.gcc }}
+        run: |
+          echo "gcc: $GCC"
+          if [ -z "$GCC" ]; then
+            echo "FAIL: gcc output is empty"
+            exit 1
+          fi
+          if [ "$GCC" != "x86_64-w64-mingw32-gcc" ]; then
+            echo "FAIL: expected gcc 'x86_64-w64-mingw32-gcc', got '$GCC'"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert gxx output
+        env:
+          GXX: ${{ steps.action.outputs.gxx }}
+        run: |
+          echo "gxx: $GXX"
+          if [ -z "$GXX" ]; then
+            echo "FAIL: gxx output is empty"
+            exit 1
+          fi
+          if [ "$GXX" != "x86_64-w64-mingw32-g++" ]; then
+            echo "FAIL: expected gxx 'x86_64-w64-mingw32-g++', got '$GXX'"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert gcc binary exists
+        run: |
+          echo "Checking for x86_64-w64-mingw32-gcc..."
+          if ! command -v x86_64-w64-mingw32-gcc-posix &>/dev/null && ! command -v x86_64-w64-mingw32-gcc &>/dev/null; then
+            echo "FAIL: x86_64-w64-mingw32-gcc not found in PATH"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert cc symlink exists
+        run: |
+          echo "Checking for cc symlink..."
+          if ! command -v cc &>/dev/null; then
+            echo "FAIL: cc not found in PATH"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert c++ symlink exists
+        run: |
+          echo "Checking for c++ symlink..."
+          if ! command -v c++ &>/dev/null; then
+            echo "FAIL: c++ not found in PATH"
+            exit 1
+          fi
+          echo "PASS"
