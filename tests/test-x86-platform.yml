@@ -1,0 +1,63 @@
+name: Test x86 platform
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Ensure PowerShell is available
+        run: |
+          if command -v pwsh &>/dev/null; then
+            echo "pwsh already available: $(pwsh --version)"
+            exit 0
+          fi
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -q
+          apt-get install -yq curl apt-transport-https lsb-release
+          UBUNTU_VERSION=$(lsb_release -rs 2>/dev/null || echo "22.04")
+          MS_URL="https://packages.microsoft.com/config/ubuntu/${UBUNTU_VERSION}/packages-microsoft-prod.deb"
+          curl -sSL "$MS_URL" -o /tmp/ms-prod.deb && dpkg -i /tmp/ms-prod.deb || true
+          apt-get update -q
+          apt-get install -yq powershell
+          echo "Installed pwsh: $(pwsh --version)"
+
+      - id: action
+        uses: .
+        with:
+          platform: x86
+          static: 0
+          cc: 1
+
+      - name: Assert gcc output
+        env:
+          ACTUAL: ${{ steps.action.outputs.gcc }}
+        run: |
+          echo "actual gcc: $ACTUAL"
+          if [ "$ACTUAL" != "i686-w64-mingw32-gcc" ]; then
+            echo "FAIL: expected gcc 'i686-w64-mingw32-gcc', got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert gxx output
+        env:
+          ACTUAL: ${{ steps.action.outputs.gxx }}
+        run: |
+          echo "actual gxx: $ACTUAL"
+          if [ "$ACTUAL" != "i686-w64-mingw32-g++" ]; then
+            echo "FAIL: expected gxx 'i686-w64-mingw32-g++', got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert gcc binary is available
+        run: |
+          which i686-w64-mingw32-gcc || (echo "FAIL: i686-w64-mingw32-gcc not found in PATH"; exit 1)
+          echo "PASS"
+
+      - name: Assert cc symlink is available
+        run: |
+          which cc || (echo "FAIL: cc not found in PATH"; exit 1)
+          echo "PASS"
