@@ -1,0 +1,82 @@
+name: Test with cc symlinks disabled
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install PowerShell
+        run: |
+          if ! command -v pwsh &>/dev/null; then
+            sudo apt-get update -q
+            sudo apt-get install -yq --no-install-recommends \
+              wget apt-transport-https software-properties-common
+            wget -q "https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb"
+            sudo dpkg -i packages-microsoft-prod.deb
+            sudo apt-get update -q
+            sudo apt-get install -yq powershell
+          fi
+          pwsh --version
+
+      - id: action
+        uses: .
+        with:
+          platform: x64
+          cygwin: '0'
+          static: '0'
+          cc: '0'
+
+      - name: Assert gcc output is set
+        env:
+          ACTUAL: ${{ steps.action.outputs.gcc }}
+        run: |
+          echo "actual gcc: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: gcc output is empty"
+            exit 1
+          fi
+          if [ "$ACTUAL" != "x86_64-w64-mingw32-gcc" ]; then
+            echo "FAIL: expected gcc 'x86_64-w64-mingw32-gcc', got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS: gcc=$ACTUAL"
+
+      - name: Assert gxx output is set
+        env:
+          ACTUAL: ${{ steps.action.outputs.gxx }}
+        run: |
+          echo "actual gxx: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: gxx output is empty"
+            exit 1
+          fi
+          if [ "$ACTUAL" != "x86_64-w64-mingw32-g++" ]; then
+            echo "FAIL: expected gxx 'x86_64-w64-mingw32-g++', got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS: gxx=$ACTUAL"
+
+      - name: Assert cc symlink was NOT created by action
+        run: |
+          # When cc=0, the action should not create /usr/local/bin/cc symlink pointing to mingw
+          if [ -L /usr/local/bin/cc ]; then
+            CC_TARGET="$(readlink -f /usr/local/bin/cc)"
+            echo "cc symlink at /usr/local/bin/cc points to: $CC_TARGET"
+            if echo "$CC_TARGET" | grep -q 'mingw'; then
+              echo "FAIL: cc symlink points to mingw binary, but cc=0 was set"
+              exit 1
+            fi
+            echo "PASS: cc symlink exists but does not point to mingw"
+          elif command -v cc &>/dev/null; then
+            CC_PATH="$(command -v cc)"
+            echo "cc found at: $CC_PATH (not a symlink at /usr/local/bin/cc)"
+            if echo "$CC_PATH" | grep -q 'mingw'; then
+              echo "FAIL: cc points to mingw binary, but cc=0 was set"
+              exit 1
+            fi
+            echo "PASS: cc exists but does not point to mingw (system cc)"
+          else
+            echo "PASS: cc not found (no symlink created)"
+          fi

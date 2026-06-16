@@ -1,0 +1,70 @@
+name: Test basic x64 (default)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install PowerShell
+        run: |
+          if ! command -v pwsh &>/dev/null; then
+            sudo apt-get update -q
+            sudo apt-get install -yq --no-install-recommends \
+              wget apt-transport-https software-properties-common
+            wget -q "https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb"
+            sudo dpkg -i packages-microsoft-prod.deb
+            sudo apt-get update -q
+            sudo apt-get install -yq powershell
+          fi
+          pwsh --version
+
+      - id: action
+        uses: .
+        with:
+          platform: x64
+          cygwin: '0'
+          static: '0'
+          cc: '1'
+
+      - name: Assert gcc output
+        env:
+          ACTUAL: ${{ steps.action.outputs.gcc }}
+        run: |
+          echo "actual gcc: $ACTUAL"
+          if [ "$ACTUAL" != "x86_64-w64-mingw32-gcc" ]; then
+            echo "FAIL: expected gcc 'x86_64-w64-mingw32-gcc', got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS: gcc=$ACTUAL"
+
+      - name: Assert gxx output
+        env:
+          ACTUAL: ${{ steps.action.outputs.gxx }}
+        run: |
+          echo "actual gxx: $ACTUAL"
+          if [ "$ACTUAL" != "x86_64-w64-mingw32-g++" ]; then
+            echo "FAIL: expected gxx 'x86_64-w64-mingw32-g++', got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS: gxx=$ACTUAL"
+
+      - name: Assert gcc binary is available
+        run: |
+          if command -v x86_64-w64-mingw32-gcc-posix &>/dev/null; then
+            echo "PASS: x86_64-w64-mingw32-gcc-posix is available"
+          elif command -v x86_64-w64-mingw32-gcc &>/dev/null; then
+            echo "PASS: x86_64-w64-mingw32-gcc is available"
+          else
+            echo "FAIL: x86_64-w64-mingw32-gcc not found in PATH"
+            exit 1
+          fi
+
+      - name: Assert cc symlink exists
+        run: |
+          if ! command -v cc &>/dev/null; then
+            echo "FAIL: cc not found in PATH"
+            exit 1
+          fi
+          echo "PASS: cc is available at $(command -v cc)"
