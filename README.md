@@ -9,6 +9,7 @@ Hardened by [Chainguard](https://www.chainguard.dev) from the upstream action at
 | Version | Tag | Upstream commit |
 |---------|-----|-----------------|
 | v2.1.0 | [`v2.1.0`](https://github.com/chainguard-actions/egor-tensin-setup-mingw/tree/v2.1.0) | [`f91eb68`](https://github.com/egor-tensin/setup-mingw/commit/f91eb68fb07f904c0e2bda62394e838d40e17f94) |
+| v2.2.0 | [`v2.2.0`](https://github.com/chainguard-actions/egor-tensin-setup-mingw/tree/v2.2.0) | [`84c781b`](https://github.com/egor-tensin/setup-mingw/commit/84c781b557efd538dec66bde06988d81cd3138cf) |
 
 ## Privacy
 
