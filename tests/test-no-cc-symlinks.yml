@@ -1,0 +1,51 @@
+name: Test with cc symlinks disabled
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install PowerShell
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq powershell || true
+          pwsh --version || (echo "pwsh not available, trying snap" && sudo snap install powershell --classic && pwsh --version)
+      - id: action
+        uses: .
+        with:
+          platform: x64
+          cc: '0'
+      - name: Assert gcc output is set
+        env:
+          ACTUAL: ${{ steps.action.outputs.gcc }}
+        run: |
+          echo "actual gcc: $ACTUAL"
+          if [ "$ACTUAL" != "x86_64-w64-mingw32-gcc" ]; then
+            echo "FAIL: expected gcc 'x86_64-w64-mingw32-gcc', got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS"
+      - name: Assert cc symlink does NOT point to mingw gcc
+        run: |
+          # When cc=0, the action should not create a cc symlink pointing to mingw gcc.
+          # The system cc (if any) should not be the mingw cross-compiler.
+          if command -v cc &>/dev/null; then
+            CC_PATH=$(readlink -f "$(command -v cc)" 2>/dev/null || command -v cc)
+            echo "cc found at: $CC_PATH"
+            if echo "$CC_PATH" | grep -q "mingw32"; then
+              echo "FAIL: cc should not point to mingw gcc when cc=0"
+              exit 1
+            fi
+            echo "PASS: cc exists but does not point to mingw"
+          else
+            echo "PASS: no cc symlink created (expected when cc=0)"
+          fi
+      - name: Assert mingw gcc binary is available
+        run: |
+          if ! command -v x86_64-w64-mingw32-gcc &>/dev/null; then
+            echo "FAIL: x86_64-w64-mingw32-gcc not found in PATH"
+            exit 1
+          fi
+          echo "x86_64-w64-mingw32-gcc found at: $(command -v x86_64-w64-mingw32-gcc)"
+          echo "PASS"

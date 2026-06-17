@@ -1,0 +1,56 @@
+name: Test x86 platform
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install PowerShell
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq powershell || true
+          pwsh --version || (echo "pwsh not available, trying snap" && sudo snap install powershell --classic && pwsh --version)
+      - id: action
+        uses: .
+        with:
+          platform: x86
+          cc: '1'
+      - name: Assert gcc output for x86
+        env:
+          ACTUAL: ${{ steps.action.outputs.gcc }}
+        run: |
+          echo "actual gcc: $ACTUAL"
+          if [ "$ACTUAL" != "i686-w64-mingw32-gcc" ]; then
+            echo "FAIL: expected gcc 'i686-w64-mingw32-gcc', got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS"
+      - name: Assert gxx output for x86
+        env:
+          ACTUAL: ${{ steps.action.outputs.gxx }}
+        run: |
+          echo "actual gxx: $ACTUAL"
+          if [ "$ACTUAL" != "i686-w64-mingw32-g++" ]; then
+            echo "FAIL: expected gxx 'i686-w64-mingw32-g++', got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS"
+      - name: Assert windres output is set
+        env:
+          ACTUAL: ${{ steps.action.outputs.windres }}
+        run: |
+          echo "actual windres: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: windres output should not be empty"
+            exit 1
+          fi
+          echo "PASS"
+      - name: Assert mingw gcc binary is available
+        run: |
+          if ! command -v i686-w64-mingw32-gcc &>/dev/null; then
+            echo "FAIL: i686-w64-mingw32-gcc not found in PATH"
+            exit 1
+          fi
+          echo "i686-w64-mingw32-gcc found at: $(command -v i686-w64-mingw32-gcc)"
+          echo "PASS"

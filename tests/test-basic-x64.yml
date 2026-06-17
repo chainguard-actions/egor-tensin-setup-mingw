@@ -1,0 +1,73 @@
+name: Test basic x64 (default)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install PowerShell
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq powershell || true
+          # Verify pwsh is available
+          pwsh --version || (echo "pwsh not available, trying snap" && sudo snap install powershell --classic && pwsh --version)
+      - id: action
+        uses: .
+        with:
+          platform: x64
+          cc: '1'
+      - name: Assert gcc output
+        env:
+          ACTUAL: ${{ steps.action.outputs.gcc }}
+        run: |
+          echo "actual gcc: $ACTUAL"
+          if [ "$ACTUAL" != "x86_64-w64-mingw32-gcc" ]; then
+            echo "FAIL: expected gcc 'x86_64-w64-mingw32-gcc', got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS"
+      - name: Assert gxx output
+        env:
+          ACTUAL: ${{ steps.action.outputs.gxx }}
+        run: |
+          echo "actual gxx: $ACTUAL"
+          if [ "$ACTUAL" != "x86_64-w64-mingw32-g++" ]; then
+            echo "FAIL: expected gxx 'x86_64-w64-mingw32-g++', got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS"
+      - name: Assert windres output is set
+        env:
+          ACTUAL: ${{ steps.action.outputs.windres }}
+        run: |
+          echo "actual windres: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: windres output should not be empty"
+            exit 1
+          fi
+          echo "PASS"
+      - name: Assert cc symlink exists
+        run: |
+          if ! command -v cc &>/dev/null; then
+            echo "FAIL: cc symlink not found"
+            exit 1
+          fi
+          echo "cc found at: $(command -v cc)"
+          echo "PASS"
+      - name: Assert c++ symlink exists
+        run: |
+          if ! command -v c++ &>/dev/null; then
+            echo "FAIL: c++ symlink not found"
+            exit 1
+          fi
+          echo "c++ found at: $(command -v c++)"
+          echo "PASS"
+      - name: Assert mingw gcc binary is available
+        run: |
+          if ! command -v x86_64-w64-mingw32-gcc &>/dev/null; then
+            echo "FAIL: x86_64-w64-mingw32-gcc not found in PATH"
+            exit 1
+          fi
+          echo "x86_64-w64-mingw32-gcc found at: $(command -v x86_64-w64-mingw32-gcc)"
+          echo "PASS"
