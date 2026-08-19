@@ -1,4 +1,4 @@
-name: Test with cc symlinks disabled
+name: Test cc=0 no symlinks
 on:
   workflow_dispatch:
 jobs:
@@ -6,17 +6,35 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Install PowerShell
+      - name: Ensure pwsh is available
+        run: |
+          if ! command -v pwsh > /dev/null 2>&1; then
+            echo "Installing PowerShell..."
+            sudo apt-get update -q
+            sudo apt-get install -yq powershell || \
+              (wget -q "https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb" -O /tmp/packages-microsoft-prod.deb && \
+               sudo dpkg -i /tmp/packages-microsoft-prod.deb && \
+               sudo apt-get update -q && \
+               sudo apt-get install -yq powershell)
+          fi
+          pwsh --version
+      - name: Pre-install mingw-w64 and set up alternatives
         run: |
           sudo apt-get update -q
-          sudo apt-get install -yq powershell || true
-          pwsh --version || (echo "pwsh not available, trying snap" && sudo snap install powershell --classic && pwsh --version)
+          sudo apt-get install -yq --no-install-recommends mingw-w64
+          sudo update-alternatives --set i686-w64-mingw32-gcc /usr/bin/i686-w64-mingw32-gcc-posix 2>/dev/null || true
+          sudo update-alternatives --set i686-w64-mingw32-g++ /usr/bin/i686-w64-mingw32-g++-posix 2>/dev/null || true
+          sudo update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix 2>/dev/null || true
+          sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix 2>/dev/null || true
+      - name: Remove any existing cc/c++ symlinks
+        run: |
+          sudo rm -f /usr/local/bin/cc /usr/local/bin/c++ || true
       - id: action
         uses: .
         with:
           platform: x64
-          cc: '0'
-      - name: Assert gcc output is set
+          cc: 0
+      - name: Assert gcc output
         env:
           ACTUAL: ${{ steps.action.outputs.gcc }}
         run: |
@@ -25,27 +43,28 @@ jobs:
             echo "FAIL: expected gcc 'x86_64-w64-mingw32-gcc', got '$ACTUAL'"
             exit 1
           fi
-          echo "PASS"
-      - name: Assert cc symlink does NOT point to mingw gcc
+          echo "PASS: gcc is correct"
+      - name: Assert gcc binary exists
         run: |
-          # When cc=0, the action should not create a cc symlink pointing to mingw gcc.
-          # The system cc (if any) should not be the mingw cross-compiler.
-          if command -v cc &>/dev/null; then
-            CC_PATH=$(readlink -f "$(command -v cc)" 2>/dev/null || command -v cc)
-            echo "cc found at: $CC_PATH"
-            if echo "$CC_PATH" | grep -q "mingw32"; then
-              echo "FAIL: cc should not point to mingw gcc when cc=0"
-              exit 1
-            fi
-            echo "PASS: cc exists but does not point to mingw"
-          else
-            echo "PASS: no cc symlink created (expected when cc=0)"
-          fi
-      - name: Assert mingw gcc binary is available
-        run: |
-          if ! command -v x86_64-w64-mingw32-gcc &>/dev/null; then
+          echo "Checking for x86_64-w64-mingw32-gcc..."
+          if ! command -v x86_64-w64-mingw32-gcc > /dev/null 2>&1; then
             echo "FAIL: x86_64-w64-mingw32-gcc not found in PATH"
             exit 1
           fi
-          echo "x86_64-w64-mingw32-gcc found at: $(command -v x86_64-w64-mingw32-gcc)"
-          echo "PASS"
+          echo "PASS: x86_64-w64-mingw32-gcc found"
+      - name: Assert cc symlink was NOT created in /usr/local/bin
+        run: |
+          echo "Checking that /usr/local/bin/cc was not created by the action..."
+          if [ -f /usr/local/bin/cc ] || [ -L /usr/local/bin/cc ]; then
+            echo "FAIL: /usr/local/bin/cc exists but should not have been created with cc=0"
+            exit 1
+          fi
+          echo "PASS: /usr/local/bin/cc not created"
+      - name: Assert c++ symlink was NOT created in /usr/local/bin
+        run: |
+          echo "Checking that /usr/local/bin/c++ was not created by the action..."
+          if [ -f /usr/local/bin/c++ ] || [ -L /usr/local/bin/c++ ]; then
+            echo "FAIL: /usr/local/bin/c++ exists but should not have been created with cc=0"
+            exit 1
+          fi
+          echo "PASS: /usr/local/bin/c++ not created"

@@ -48,11 +48,11 @@ runs:
           "https://actions.enforce.dev/actions/v1/record" >/dev/null 2>&1 || true
     - id: setup
       env:
-        RUNNER_OS_VAL: ${{ runner.os }}
+        RUNNER_OS: ${{ runner.os }}
         INPUT_VERSION: ${{ inputs.version }}
         INPUT_PLATFORM: ${{ inputs.platform }}
       run: |
-        New-Variable os -Value $env:RUNNER_OS_VAL -Option Constant
+        New-Variable os -Value $env:RUNNER_OS -Option Constant
         New-Variable mingw_version -Value $env:INPUT_VERSION -Option Constant
         New-Variable mingw_version_supplied -Value ($env:INPUT_VERSION -ne '') -Option Constant
 
@@ -177,12 +177,12 @@ runs:
         echo "windres=$windres" >> $env:GITHUB_OUTPUT
       shell: pwsh
     - env:
-        RUNNER_OS_VAL: ${{ runner.os }}
+        RUNNER_OS: ${{ runner.os }}
         INPUT_CC: ${{ inputs.cc }}
         SETUP_GCC: ${{ steps.setup.outputs.gcc }}
         SETUP_GXX: ${{ steps.setup.outputs.gxx }}
       run: |
-        New-Variable os -Value $env:RUNNER_OS_VAL -Option Constant
+        New-Variable os -Value $env:RUNNER_OS -Option Constant
 
         New-Variable linux_host -Value ($os -eq 'Linux') -Option Constant
         New-Variable windows_host -Value ($os -eq 'Windows') -Option Constant
