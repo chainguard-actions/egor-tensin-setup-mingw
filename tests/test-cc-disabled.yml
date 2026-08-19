@@ -1,0 +1,60 @@
+name: Test MinGW setup with cc symlinks disabled
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install PowerShell
+        run: |
+          if ! command -v pwsh > /dev/null 2>&1; then
+            sudo apt-get update -q
+            sudo apt-get install -yq powershell || true
+          fi
+          pwsh --version || echo "pwsh not available, skipping"
+
+      - id: action
+        uses: .
+        with:
+          platform: x64
+          cc: '0'
+
+      - name: Assert gcc output is still correct
+        env:
+          ACTUAL: ${{ steps.action.outputs.gcc }}
+        run: |
+          echo "actual gcc: $ACTUAL"
+          if [ "$ACTUAL" != "x86_64-w64-mingw32-gcc" ]; then
+            echo "FAIL: expected gcc 'x86_64-w64-mingw32-gcc', got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS: gcc output is correct"
+
+      - name: Assert gcc binary exists on PATH
+        run: |
+          echo "Checking for x86_64-w64-mingw32-gcc on PATH..."
+          if ! command -v x86_64-w64-mingw32-gcc > /dev/null 2>&1; then
+            echo "FAIL: x86_64-w64-mingw32-gcc not found on PATH"
+            exit 1
+          fi
+          echo "PASS: x86_64-w64-mingw32-gcc found"
+
+      - name: Assert cc symlink is NOT created
+        run: |
+          echo "Checking that cc does NOT point to mingw gcc..."
+          # cc may exist as a system compiler (e.g. gcc wrapper), but it should
+          # NOT be the mingw cross-compiler when cc=0
+          if command -v cc > /dev/null 2>&1; then
+            CC_PATH="$(readlink -f "$(command -v cc)" 2>/dev/null || command -v cc)"
+            echo "cc resolves to: $CC_PATH"
+            # If cc points to a mingw binary, that's a failure
+            if echo "$CC_PATH" | grep -q "mingw32"; then
+              echo "FAIL: cc symlink points to mingw binary but cc=0 was set"
+              exit 1
+            fi
+            echo "PASS: cc exists but does not point to mingw (system cc is fine)"
+          else
+            echo "PASS: cc not found (no symlink created as expected)"
+          fi
