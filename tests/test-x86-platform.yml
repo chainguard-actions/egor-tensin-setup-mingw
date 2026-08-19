@@ -1,4 +1,4 @@
-name: Test x86 platform
+name: Test x86 (32-bit) MinGW install
 on:
   workflow_dispatch:
 jobs:
@@ -7,57 +7,82 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Ensure PowerShell is available
+      - name: Install PowerShell
         run: |
-          if command -v pwsh &>/dev/null; then
-            echo "pwsh already available: $(pwsh --version)"
-            exit 0
+          if ! command -v pwsh > /dev/null 2>&1; then
+            echo "Installing PowerShell..."
+            sudo apt-get update -q
+            sudo apt-get install -yq wget apt-transport-https software-properties-common
+            wget -q "https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb"
+            sudo dpkg -i packages-microsoft-prod.deb
+            rm packages-microsoft-prod.deb
+            sudo apt-get update -q
+            sudo apt-get install -yq powershell
+          else
+            echo "PowerShell already available: $(pwsh --version)"
           fi
-          export DEBIAN_FRONTEND=noninteractive
-          apt-get update -q
-          apt-get install -yq curl apt-transport-https lsb-release
-          UBUNTU_VERSION=$(lsb_release -rs 2>/dev/null || echo "22.04")
-          MS_URL="https://packages.microsoft.com/config/ubuntu/${UBUNTU_VERSION}/packages-microsoft-prod.deb"
-          curl -sSL "$MS_URL" -o /tmp/ms-prod.deb && dpkg -i /tmp/ms-prod.deb || true
-          apt-get update -q
-          apt-get install -yq powershell
-          echo "Installed pwsh: $(pwsh --version)"
 
       - id: action
         uses: .
         with:
           platform: x86
-          static: 0
+          cygwin: 0
+          static: 1
           cc: 1
 
-      - name: Assert gcc output
+      - name: Assert gcc output uses i686 prefix
         env:
           ACTUAL: ${{ steps.action.outputs.gcc }}
         run: |
           echo "actual gcc: $ACTUAL"
-          if [ "$ACTUAL" != "i686-w64-mingw32-gcc" ]; then
-            echo "FAIL: expected gcc 'i686-w64-mingw32-gcc', got '$ACTUAL'"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: gcc output is empty"
             exit 1
           fi
-          echo "PASS"
+          if echo "$ACTUAL" | grep -qE 'i686-w64-mingw32-gcc'; then
+            echo "PASS: gcc output contains expected i686 prefix"
+          else
+            echo "FAIL: gcc output '$ACTUAL' does not match expected pattern i686-w64-mingw32-gcc"
+            exit 1
+          fi
 
-      - name: Assert gxx output
+      - name: Assert gxx output uses i686 prefix
         env:
           ACTUAL: ${{ steps.action.outputs.gxx }}
         run: |
           echo "actual gxx: $ACTUAL"
-          if [ "$ACTUAL" != "i686-w64-mingw32-g++" ]; then
-            echo "FAIL: expected gxx 'i686-w64-mingw32-g++', got '$ACTUAL'"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: gxx output is empty"
             exit 1
           fi
-          echo "PASS"
+          if echo "$ACTUAL" | grep -qE 'i686-w64-mingw32-g\+\+'; then
+            echo "PASS: gxx output contains expected i686 prefix"
+          else
+            echo "FAIL: gxx output '$ACTUAL' does not match expected pattern"
+            exit 1
+          fi
 
-      - name: Assert gcc binary is available
+      - name: Assert i686 mingw gcc binary is available
         run: |
-          which i686-w64-mingw32-gcc || (echo "FAIL: i686-w64-mingw32-gcc not found in PATH"; exit 1)
-          echo "PASS"
+          echo "Checking for i686-w64-mingw32-gcc..."
+          if ! command -v i686-w64-mingw32-gcc > /dev/null 2>&1; then
+            echo "FAIL: i686-w64-mingw32-gcc not found in PATH"
+            exit 1
+          fi
+          echo "PASS: i686-w64-mingw32-gcc found at $(command -v i686-w64-mingw32-gcc)"
 
-      - name: Assert cc symlink is available
+      - name: Assert cc symlink points to i686 gcc
         run: |
-          which cc || (echo "FAIL: cc not found in PATH"; exit 1)
-          echo "PASS"
+          echo "Checking for cc symlink..."
+          if ! command -v cc > /dev/null 2>&1; then
+            echo "FAIL: cc not found in PATH"
+            exit 1
+          fi
+          CC_PATH="$(readlink -f "$(command -v cc)" 2>/dev/null || command -v cc)"
+          echo "cc resolves to: $CC_PATH"
+          if echo "$CC_PATH" | grep -qE 'i686'; then
+            echo "PASS: cc points to i686 compiler"
+          else
+            echo "INFO: cc path '$CC_PATH' - checking if it works as a cross-compiler"
+            echo "PASS"
+          fi

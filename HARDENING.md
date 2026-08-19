@@ -8,56 +8,42 @@
 
 **Test Policy SHA:** `843adf9e4b8f85d0c08b27b9d0b09dd094b54702`
 
-**Harden Agent Version:** `1`
+**Harden Agent Version:** `2`
 
-Action **egor-tensin--setup-mingw/v2.1.0** was hardened automatically. 9 finding(s) were identified and resolved across 1 iteration(s).
+Action **egor-tensin--setup-mingw/v2.1.0** was hardened automatically. 10 finding(s) were identified and resolved across 3 iteration(s).
 
 ## Findings Fixed
 
 ### script-injection (severity: high)
 
-Sub-rule (a): Multiple `run:` blocks in action.yml directly interpolate `${{ inputs.* }}` and `${{ runner.os }}` expressions inside PowerShell script strings. GitHub Actions performs YAML template substitution before the shell executes the script, so a caller-supplied input value containing PowerShell metacharacters (quotes, semicolons, command-substitution syntax, etc.) can inject arbitrary PowerShell commands.
-
-Step 1 (id: setup): `New-Variable os -Value '${{ runner.os }}' -Option Constant`, `New-Variable cygwin_host -Value ('${{ inputs.cygwin }}' -eq '1') -Option Constant`, `New-Variable x64 -Value ('${{ inputs.platform }}' -eq 'x64') -Option Constant`, `New-Variable static_workaround -Value ('${{ inputs.static }}' -eq '1') -Option Constant`.
-
-Step 2: `New-Variable os -Value '${{ runner.os }}' -Option Constant`, `New-Variable cygwin_host -Value ('${{ inputs.cygwin }}' -eq '1') -Option Constant`, `New-Variable cc -Value ('${{ inputs.cc }}' -eq '1') -Option Constant`, `Link-Exe '${{ steps.setup.outputs.gcc }}' cc`, `Link-Exe '${{ steps.setup.outputs.gxx }}' c++`.
-
-Step 3: `New-Variable cygwin_host -Value ('${{ inputs.cygwin }}' -eq '1') -Option Constant`, `New-Variable hardlinks -Value ('${{ inputs.hardlinks }}' -eq '1') -Option Constant`.
-
-All `inputs.*` values are caller-controlled and must be passed via environment variables and referenced as `$env:VAR` rather than interpolated directly as `${{ inputs.* }}`.
+Sub-rule (a): Multiple run: blocks in action.yml directly interpolate GitHub Actions expressions inside PowerShell script strings. Step 1 (id: setup) uses '${{ runner.os }}', '${{ inputs.cygwin }}', '${{ inputs.platform }}', and '${{ inputs.static }}' directly in the shell command. Step 2 uses '${{ runner.os }}', '${{ inputs.cygwin }}', '${{ inputs.cc }}', '${{ steps.setup.outputs.gcc }}', and '${{ steps.setup.outputs.gxx }}' directly. Step 3 uses '${{ inputs.cygwin }}' and '${{ inputs.hardlinks }}' directly. These expressions are substituted by the Actions template engine before the shell sees them, allowing an attacker-controlled value to inject arbitrary PowerShell commands. Additionally, .github/workflows/test.yml has a run: block that interpolates '${{ steps.setup.outputs.gxx }}' directly into a PowerShell command string.
 
 Locations:
 
-- `action.yml:45`
-- `action.yml:48`
-- `action.yml:51`
-- `action.yml:52`
-- `action.yml:132`
-- `action.yml:135`
-- `action.yml:137`
-- `action.yml:158`
-- `action.yml:159`
-- `action.yml:164`
-- `action.yml:165`
+- `action.yml:44`
+- `action.yml:160`
+- `action.yml:200`
+- `.github/workflows/test.yml:36`
+- `.github/workflows/test.yml:69`
 
-### github-env-injection (severity: high)
+### unpinned-uses (severity: high)
 
-The first `run:` block (step id: setup) writes values derived from caller-controlled inputs to `$env:GITHUB_PATH` and `$env:GITHUB_OUTPUT` without the required sanitization step (`printf '%s' ... | tr -d '\n\r'`).
-
-1. `echo $bin_dir >> $env:GITHUB_PATH` — `$bin_dir` is computed via `cygpath.exe` from `$prefix`, which is derived from `${{ inputs.platform }}` (caller-controlled). An attacker can inject newlines to poison GITHUB_PATH.
-
-2. `echo $mingw_bin >> $env:GITHUB_PATH` — `$mingw_bin` is derived from `$mingw_root` which depends on `$prefix` (from `${{ inputs.platform }}`). Same risk.
-
-3. `echo "prefix=$prefix" >> $env:GITHUB_OUTPUT`, `echo "gcc=$gcc" >> $env:GITHUB_OUTPUT`, `echo "gxx=$gxx" >> $env:GITHUB_OUTPUT`, `echo "windres=$windres" >> $env:GITHUB_OUTPUT` — all values are derived from `${{ inputs.platform }}` without sanitization, allowing newline injection to set arbitrary GITHUB_OUTPUT key-value pairs.
+The workflow file .github/workflows/test.yml references external actions using mutable version tags instead of full 40-character commit SHAs. Failing references: 'actions/checkout@v3' (lines 24 and 57), 'egor-tensin/setup-cygwin@v4' (line 26), 'egor-tensin/cleanup-path@v3' (line 59). These tags can be moved to point to different (potentially malicious) commits without notice, enabling supply-chain attacks.
 
 Locations:
 
-- `action.yml:100`
-- `action.yml:118`
-- `action.yml:124`
-- `action.yml:125`
-- `action.yml:126`
-- `action.yml:127`
+- `.github/workflows/test.yml:24`
+- `.github/workflows/test.yml:26`
+- `.github/workflows/test.yml:57`
+- `.github/workflows/test.yml:59`
+
+### missing-permissions (severity: medium)
+
+The workflow file .github/workflows/test.yml has no top-level 'permissions:' key, and neither of its two jobs ('cygwin' and 'test') defines a job-level 'permissions:' block. Without explicit permissions, the workflow inherits the repository's default token permissions, which may be overly broad.
+
+Locations:
+
+- `.github/workflows/test.yml:1`
 
 ### static-inline-injection (severity: high)
 
@@ -119,13 +105,33 @@ Locations:
 
 ### Iteration 1
 
-**Fixes applied:** script-injection, github-env-injection, static-inline-injection
+**Fixes applied:** script-injection, static-inline-injection, unpinned-uses, missing-permissions
 
 **Notes:**
 
-Fixed all three steps in action.yml:
+Fixed all findings across action.yml and .github/workflows/test.yml:
 
-1. script-injection / static-inline-injection: Moved all ${{ inputs.* }} and ${{ runner.os }} expressions out of run: blocks into env: blocks for each step. In the PowerShell scripts, these are now referenced as $env:INPUT_OS, $env:INPUT_CYGWIN, $env:INPUT_PLATFORM, $env:INPUT_STATIC, $env:INPUT_CC, $env:INPUT_GCC, $env:INPUT_GXX, $env:INPUT_HARDLINKS.
+1. script-injection/static-inline-injection in action.yml: All three run: blocks had ${{ }} expressions moved to env: blocks. Step 1 (setup): RUNNER_OS, INPUT_CYGWIN, INPUT_PLATFORM, INPUT_STATIC. Step 2: RUNNER_OS, INPUT_CYGWIN, INPUT_CC, SETUP_GCC, SETUP_GXX. Step 3: INPUT_CYGWIN, INPUT_HARDLINKS. All PowerShell references updated to use $env:VAR_NAME.
 
-2. github-env-injection: Added PowerShell -replace '[\r\n]', '' sanitization for all values written to $env:GITHUB_PATH ($bin_dir → $safe_bin_dir, $mingw_bin → $safe_mingw_bin) and $env:GITHUB_OUTPUT ($prefix → $safe_prefix, $gcc → $safe_gcc, $gxx → $safe_gxx, $windres → $safe_windres) to prevent newline injection attacks.
+2. script-injection in test.yml: Both 'Build foo.exe' steps that used '${{ steps.setup.outputs.gxx }}' directly in PowerShell were fixed by adding env: SETUP_GXX: ${{ steps.setup.outputs.gxx }} and referencing $env:SETUP_GXX in the script.
+
+3. unpinned-uses in test.yml: Pinned all four action references to full SHAs: actions/checkout@v3 → @a37ce9120846195fa4ece8f58b268e6043cb2f26 (both occurrences), egor-tensin/setup-cygwin@v4 → @fca9069f92361187d4abfaa5d8a7490e435d8349, egor-tensin/cleanup-path@v3 → @8469525c8ee3eddabbd3487658621a6235b3c581.
+
+4. missing-permissions in test.yml: Added 'permissions: {}' at the top level to explicitly restrict all token permissions.
+
+### Iteration 2
+
+**Fixes applied:** script-injection, github-env-injection
+
+**Notes:**
+
+Fixed script-injection in .github/actions/check-cc/action.yml by moving ${{ inputs.version }} into an env: block (INPUT_VERSION) and referencing it as $env:INPUT_VERSION in the PowerShell script. Fixed github-env-injection in action.yml by sanitizing all user-controlled values derived from inputs.platform before writing to $GITHUB_PATH and $GITHUB_OUTPUT using PowerShell's -replace '[\r\n]', '' to strip newlines: $safe_bin_dir for the cygwin GITHUB_PATH write, and $safe_prefix/$safe_gcc/$safe_gxx/$safe_windres for the four GITHUB_OUTPUT writes.
+
+### Iteration 3
+
+**Fixes applied:** script-injection
+
+**Notes:**
+
+Fixed both occurrences of unquoted `$env:SETUP_GXX` in PowerShell `run:` blocks in `.github/workflows/test.yml` (lines 39 and 71). Changed `& $env:SETUP_GXX` to `& "$env:SETUP_GXX"` in both the `cygwin` and `test` jobs. The `${{ steps.setup.outputs.gxx }}` expression was already correctly moved into the `env:` block; the remaining issue was that the PowerShell variable was not quoted when passed to the `&` call operator, allowing potential metacharacter injection.
 

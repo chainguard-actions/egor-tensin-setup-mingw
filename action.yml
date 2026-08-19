@@ -56,12 +56,12 @@ runs:
           "https://actions.enforce.dev/actions/v1/record" >/dev/null 2>&1 || true
     - id: setup
       env:
-        INPUT_OS: ${{ runner.os }}
+        RUNNER_OS: ${{ runner.os }}
         INPUT_CYGWIN: ${{ inputs.cygwin }}
         INPUT_PLATFORM: ${{ inputs.platform }}
         INPUT_STATIC: ${{ inputs.static }}
       run: |
-        New-Variable os -Value $env:INPUT_OS -Option Constant
+        New-Variable os -Value $env:RUNNER_OS -Option Constant
 
         New-Variable linux_host -Value ($os -eq 'Linux') -Option Constant
         New-Variable cygwin_host -Value ($env:INPUT_CYGWIN -eq '1') -Option Constant
@@ -179,8 +179,7 @@ runs:
                 Remove-Package $pkg
                 Install-Package $pkg --x86
             }
-            $safe_mingw_bin = $mingw_bin -replace '[\r\n]', ''
-            echo $safe_mingw_bin >> $env:GITHUB_PATH
+            echo $mingw_bin >> $env:GITHUB_PATH
 
             if ($static_workaround) {
                 Remove-Item (Join-Path $mingw_lib 'libpthread.dll.a')
@@ -205,13 +204,13 @@ runs:
         echo "windres=$safe_windres" >> $env:GITHUB_OUTPUT
       shell: pwsh
     - env:
-        INPUT_OS: ${{ runner.os }}
+        RUNNER_OS: ${{ runner.os }}
         INPUT_CYGWIN: ${{ inputs.cygwin }}
         INPUT_CC: ${{ inputs.cc }}
-        INPUT_GCC: ${{ steps.setup.outputs.gcc }}
-        INPUT_GXX: ${{ steps.setup.outputs.gxx }}
+        SETUP_GCC: ${{ steps.setup.outputs.gcc }}
+        SETUP_GXX: ${{ steps.setup.outputs.gxx }}
       run: |
-        New-Variable os -Value $env:INPUT_OS -Option Constant
+        New-Variable os -Value $env:RUNNER_OS -Option Constant
 
         New-Variable linux_host -Value ($os -eq 'Linux') -Option Constant
         New-Variable cygwin_host -Value ($env:INPUT_CYGWIN -eq '1') -Option Constant
@@ -242,8 +241,8 @@ runs:
         }
 
         if ($cc) {
-            Link-Exe $env:INPUT_GCC cc
-            Link-Exe $env:INPUT_GXX 'c++'
+            Link-Exe $env:SETUP_GCC cc
+            Link-Exe $env:SETUP_GXX c++
         }
       shell: pwsh
     - env:

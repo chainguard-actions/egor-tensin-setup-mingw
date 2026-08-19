@@ -1,0 +1,73 @@
+name: Test MinGW install without cc symlink
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install PowerShell
+        run: |
+          if ! command -v pwsh > /dev/null 2>&1; then
+            echo "Installing PowerShell..."
+            sudo apt-get update -q
+            sudo apt-get install -yq wget apt-transport-https software-properties-common
+            wget -q "https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb"
+            sudo dpkg -i packages-microsoft-prod.deb
+            rm packages-microsoft-prod.deb
+            sudo apt-get update -q
+            sudo apt-get install -yq powershell
+          else
+            echo "PowerShell already available: $(pwsh --version)"
+          fi
+
+      - id: action
+        uses: .
+        with:
+          platform: x64
+          cygwin: 0
+          static: 1
+          cc: 0
+
+      - name: Assert gcc output is set
+        env:
+          ACTUAL: ${{ steps.action.outputs.gcc }}
+        run: |
+          echo "actual gcc: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: gcc output is empty"
+            exit 1
+          fi
+          if echo "$ACTUAL" | grep -qE 'x86_64-w64-mingw32-gcc'; then
+            echo "PASS: gcc output is correct"
+          else
+            echo "FAIL: gcc output '$ACTUAL' does not match expected pattern"
+            exit 1
+          fi
+
+      - name: Assert mingw gcc binary is available
+        run: |
+          echo "Checking for x86_64-w64-mingw32-gcc..."
+          if ! command -v x86_64-w64-mingw32-gcc > /dev/null 2>&1; then
+            echo "FAIL: x86_64-w64-mingw32-gcc not found in PATH"
+            exit 1
+          fi
+          echo "PASS: x86_64-w64-mingw32-gcc found"
+
+      - name: Assert cc does not point to mingw compiler (cc=0)
+        run: |
+          echo "Checking that cc symlink was NOT set up to mingw..."
+          # When cc=0, the action should NOT create a cc symlink to the mingw compiler.
+          # cc may still exist (system gcc), but it should not be the mingw cross-compiler.
+          if command -v cc > /dev/null 2>&1; then
+            CC_PATH="$(readlink -f "$(command -v cc)" 2>/dev/null || command -v cc)"
+            echo "cc found at: $CC_PATH"
+            if echo "$CC_PATH" | grep -qE 'mingw'; then
+              echo "FAIL: cc points to mingw compiler but cc=0 was set"
+              exit 1
+            fi
+            echo "PASS: cc exists but does not point to mingw compiler"
+          else
+            echo "PASS: cc not found (no symlink created as expected)"
+          fi

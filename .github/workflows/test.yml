@@ -1,0 +1,84 @@
+name: Test
+
+on:
+  push:
+  pull_request:
+  schedule:
+    # Weekly, at 5:45 AM on Friday (somewhat randomly chosen).
+    - cron: '45 5 * * 5'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  cygwin:
+    strategy:
+      # It's much easier to re-run as few jobs as possible:
+      fail-fast: false
+      matrix:
+        hardlinks: [0, 1]
+    runs-on: windows-latest
+    name: 'Cygwin: hardlinks${{ matrix.hardlinks }}'
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3
+      - name: Install Cygwin
+        uses: egor-tensin/setup-cygwin@fca9069f92361187d4abfaa5d8a7490e435d8349 # v4
+      - name: Set up MinGW
+        id: setup
+        uses: ./
+        with:
+          cygwin: 1
+          cc: 1
+          hardlinks: '${{ matrix.hardlinks }}'
+      - name: Build foo.exe
+        env:
+          SETUP_GXX: ${{ steps.setup.outputs.gxx }}
+        run: |
+          & "$env:SETUP_GXX" -std=c++14 -o foo foo.cpp
+      - name: Run foo.exe
+        uses: ./.github/actions/run-foo
+      - name: Check cc/c++
+        uses: ./.github/actions/check-cc
+        if: matrix.hardlinks
+      - name: Check cc/c++
+        uses: ./.github/actions/check-cc-cygwin
+        if: '!matrix.hardlinks'
+
+  test:
+    strategy:
+      # It's much easier to re-run as few jobs as possible:
+      fail-fast: false
+      matrix:
+        platform: [x86, x64]
+        os: [ubuntu-18.04, ubuntu-20.04, ubuntu-22.04, ubuntu-latest, windows-2019, windows-2022, windows-latest]
+    runs-on: '${{ matrix.os }}'
+    name: 'Test: ${{ matrix.os }} / ${{ matrix.platform }}'
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3
+      - name: Clean up PATH
+        uses: egor-tensin/cleanup-path@8469525c8ee3eddabbd3487658621a6235b3c581 # v3
+        if: runner.os == 'Windows'
+      - name: Set up MinGW
+        id: setup
+        uses: ./
+        with:
+          platform: '${{ matrix.platform }}'
+          cc: 1
+      - name: Build foo.exe
+        env:
+          SETUP_GXX: ${{ steps.setup.outputs.gxx }}
+        run: |
+          & "$env:SETUP_GXX" -std=c++14 -o foo foo.cpp
+      - name: Run foo.exe
+        uses: ./.github/actions/run-foo
+        if: runner.os == 'Windows'
+      - name: Check cc/c++
+        uses: ./.github/actions/check-cc
