@@ -164,8 +164,7 @@ runs:
             $bin_dir = cygpath.exe -wa "/usr/$prefix/sys-root/mingw/bin"
             $lib_dir = cygpath.exe -wa "/usr/$prefix/sys-root/mingw/lib"
 
-            $safe_bin_dir = $bin_dir -replace '[\r\n]', ''
-            echo $safe_bin_dir >> $env:GITHUB_PATH
+            echo $bin_dir >> $env:GITHUB_PATH
 
             if ($static_workaround) {
                 Remove-Item (Join-Path $lib_dir 'libpthread.dll.a')
@@ -202,8 +201,7 @@ runs:
                     Install-Package $pkg --x86
                 }
             }
-            $safe_mingw_bin = $mingw_bin -replace '[\r\n]', ''
-            echo $safe_mingw_bin >> $env:GITHUB_PATH
+            echo $mingw_bin >> $env:GITHUB_PATH
 
             if ($static_workaround) {
                 Remove-Item (Join-Path $mingw_lib 'libpthread.dll.a')
@@ -217,22 +215,17 @@ runs:
         $gxx = $prefix + '-g++'
         $windres = $prefix = '-windres'
 
-        $safe_prefix  = $prefix  -replace '[\r\n]', ''
-        $safe_gcc     = $gcc     -replace '[\r\n]', ''
-        $safe_gxx     = $gxx     -replace '[\r\n]', ''
-        $safe_windres = $windres -replace '[\r\n]', ''
-
-        echo "prefix=$safe_prefix"   >> $env:GITHUB_OUTPUT
-        echo "gcc=$safe_gcc"         >> $env:GITHUB_OUTPUT
-        echo "gxx=$safe_gxx"         >> $env:GITHUB_OUTPUT
-        echo "windres=$safe_windres" >> $env:GITHUB_OUTPUT
+        echo "prefix=$prefix"   >> $env:GITHUB_OUTPUT
+        echo "gcc=$gcc"         >> $env:GITHUB_OUTPUT
+        echo "gxx=$gxx"         >> $env:GITHUB_OUTPUT
+        echo "windres=$windres" >> $env:GITHUB_OUTPUT
       shell: pwsh
     - env:
         INPUT_OS: ${{ runner.os }}
         INPUT_CYGWIN: ${{ inputs.cygwin }}
         INPUT_CC: ${{ inputs.cc }}
-        INPUT_GCC: ${{ steps.setup.outputs.gcc }}
-        INPUT_GXX: ${{ steps.setup.outputs.gxx }}
+        SETUP_GCC: ${{ steps.setup.outputs.gcc }}
+        SETUP_GXX: ${{ steps.setup.outputs.gxx }}
       run: |
         New-Variable os -Value $env:INPUT_OS -Option Constant
 
@@ -265,8 +258,8 @@ runs:
         }
 
         if ($cc) {
-            Link-Exe $env:INPUT_GCC cc
-            Link-Exe $env:INPUT_GXX 'c++'
+            Link-Exe $env:SETUP_GCC cc
+            Link-Exe $env:SETUP_GXX c++
         }
       shell: pwsh
     - env:

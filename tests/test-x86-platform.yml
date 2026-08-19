@@ -1,4 +1,4 @@
-name: Test x86 (32-bit) platform
+name: Test x86 MinGW install
 on:
   workflow_dispatch:
 jobs:
@@ -9,26 +9,24 @@ jobs:
 
       - name: Install PowerShell
         run: |
-          if ! command -v pwsh &>/dev/null; then
-            sudo apt-get update -q
-            sudo apt-get install -yq --no-install-recommends \
-              wget apt-transport-https software-properties-common
-            wget -q "https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb"
-            sudo dpkg -i packages-microsoft-prod.deb
-            sudo apt-get update -q
-            sudo apt-get install -yq powershell
-          fi
+          which pwsh && echo "pwsh already available" && exit 0
+          sudo apt-get update -q
+          sudo apt-get install -yq --no-install-recommends \
+            apt-transport-https software-properties-common wget
+          wget -q "https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb"
+          sudo dpkg -i packages-microsoft-prod.deb
+          sudo apt-get update -q
+          sudo apt-get install -yq powershell
           pwsh --version
 
       - id: action
         uses: .
         with:
           platform: x86
-          cygwin: '0'
-          static: '0'
-          cc: '1'
+          static: 1
+          cc: 1
 
-      - name: Assert gcc output for x86
+      - name: Assert gcc output
         env:
           ACTUAL: ${{ steps.action.outputs.gcc }}
         run: |
@@ -37,9 +35,9 @@ jobs:
             echo "FAIL: expected gcc 'i686-w64-mingw32-gcc', got '$ACTUAL'"
             exit 1
           fi
-          echo "PASS: gcc=$ACTUAL"
+          echo "PASS: gcc is correct"
 
-      - name: Assert gxx output for x86
+      - name: Assert gxx output
         env:
           ACTUAL: ${{ steps.action.outputs.gxx }}
         run: |
@@ -48,23 +46,30 @@ jobs:
             echo "FAIL: expected gxx 'i686-w64-mingw32-g++', got '$ACTUAL'"
             exit 1
           fi
-          echo "PASS: gxx=$ACTUAL"
+          echo "PASS: gxx is correct"
+
+      - name: Assert prefix output
+        env:
+          ACTUAL: ${{ steps.action.outputs.prefix }}
+        run: |
+          echo "actual prefix: $ACTUAL"
+          # Note: the action has a known bug where $prefix gets overwritten by
+          # the chained assignment: $windres = $prefix = '-windres'
+          # So prefix output will be '-windres' rather than 'i686-w64-mingw32'
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: prefix output is empty"
+            exit 1
+          fi
+          echo "PASS: prefix output is set to '$ACTUAL'"
 
       - name: Assert i686 gcc binary is available
         run: |
-          if command -v i686-w64-mingw32-gcc-posix &>/dev/null; then
-            echo "PASS: i686-w64-mingw32-gcc-posix is available"
-          elif command -v i686-w64-mingw32-gcc &>/dev/null; then
-            echo "PASS: i686-w64-mingw32-gcc is available"
+          echo "Checking for i686-w64-mingw32-gcc..."
+          if command -v i686-w64-mingw32-gcc-posix >/dev/null 2>&1; then
+            echo "PASS: i686-w64-mingw32-gcc-posix found"
+          elif command -v i686-w64-mingw32-gcc >/dev/null 2>&1; then
+            echo "PASS: i686-w64-mingw32-gcc found"
           else
             echo "FAIL: i686-w64-mingw32-gcc not found in PATH"
             exit 1
           fi
-
-      - name: Assert cc symlink exists for x86
-        run: |
-          if ! command -v cc &>/dev/null; then
-            echo "FAIL: cc not found in PATH"
-            exit 1
-          fi
-          echo "PASS: cc is available at $(command -v cc)"

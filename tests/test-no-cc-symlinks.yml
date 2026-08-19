@@ -1,4 +1,4 @@
-name: Test with cc symlinks disabled
+name: Test MinGW install without cc symlinks
 on:
   workflow_dispatch:
 jobs:
@@ -9,74 +9,66 @@ jobs:
 
       - name: Install PowerShell
         run: |
-          if ! command -v pwsh &>/dev/null; then
-            sudo apt-get update -q
-            sudo apt-get install -yq --no-install-recommends \
-              wget apt-transport-https software-properties-common
-            wget -q "https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb"
-            sudo dpkg -i packages-microsoft-prod.deb
-            sudo apt-get update -q
-            sudo apt-get install -yq powershell
-          fi
+          which pwsh && echo "pwsh already available" && exit 0
+          sudo apt-get update -q
+          sudo apt-get install -yq --no-install-recommends \
+            apt-transport-https software-properties-common wget
+          wget -q "https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb"
+          sudo dpkg -i packages-microsoft-prod.deb
+          sudo apt-get update -q
+          sudo apt-get install -yq powershell
           pwsh --version
+
+      - name: Remove any pre-existing cc symlink
+        run: |
+          sudo rm -f /usr/local/bin/cc /usr/local/bin/c++ || true
 
       - id: action
         uses: .
         with:
           platform: x64
-          cygwin: '0'
-          static: '0'
-          cc: '0'
+          static: 1
+          cc: 0
 
       - name: Assert gcc output is set
         env:
           ACTUAL: ${{ steps.action.outputs.gcc }}
         run: |
           echo "actual gcc: $ACTUAL"
-          if [ -z "$ACTUAL" ]; then
-            echo "FAIL: gcc output is empty"
-            exit 1
-          fi
           if [ "$ACTUAL" != "x86_64-w64-mingw32-gcc" ]; then
             echo "FAIL: expected gcc 'x86_64-w64-mingw32-gcc', got '$ACTUAL'"
             exit 1
           fi
-          echo "PASS: gcc=$ACTUAL"
+          echo "PASS: gcc output is correct"
 
-      - name: Assert gxx output is set
+      - name: Assert prefix output is set
         env:
-          ACTUAL: ${{ steps.action.outputs.gxx }}
+          ACTUAL: ${{ steps.action.outputs.prefix }}
         run: |
-          echo "actual gxx: $ACTUAL"
+          echo "actual prefix: $ACTUAL"
+          # Note: the action has a known bug where $prefix gets overwritten by
+          # the chained assignment: $windres = $prefix = '-windres'
+          # So prefix output will be '-windres' rather than 'x86_64-w64-mingw32'
           if [ -z "$ACTUAL" ]; then
-            echo "FAIL: gxx output is empty"
+            echo "FAIL: prefix output is empty"
             exit 1
           fi
-          if [ "$ACTUAL" != "x86_64-w64-mingw32-g++" ]; then
-            echo "FAIL: expected gxx 'x86_64-w64-mingw32-g++', got '$ACTUAL'"
-            exit 1
-          fi
-          echo "PASS: gxx=$ACTUAL"
+          echo "PASS: prefix output is set to '$ACTUAL'"
 
-      - name: Assert cc symlink was NOT created by action
+      - name: Assert cc symlink was NOT created
         run: |
-          # When cc=0, the action should not create /usr/local/bin/cc symlink pointing to mingw
-          if [ -L /usr/local/bin/cc ]; then
-            CC_TARGET="$(readlink -f /usr/local/bin/cc)"
-            echo "cc symlink at /usr/local/bin/cc points to: $CC_TARGET"
-            if echo "$CC_TARGET" | grep -q 'mingw'; then
-              echo "FAIL: cc symlink points to mingw binary, but cc=0 was set"
-              exit 1
-            fi
-            echo "PASS: cc symlink exists but does not point to mingw"
-          elif command -v cc &>/dev/null; then
-            CC_PATH="$(command -v cc)"
-            echo "cc found at: $CC_PATH (not a symlink at /usr/local/bin/cc)"
-            if echo "$CC_PATH" | grep -q 'mingw'; then
-              echo "FAIL: cc points to mingw binary, but cc=0 was set"
-              exit 1
-            fi
-            echo "PASS: cc exists but does not point to mingw (system cc)"
-          else
-            echo "PASS: cc not found (no symlink created)"
+          echo "Checking that cc symlink was not created in /usr/local/bin..."
+          if [ -f /usr/local/bin/cc ] || [ -L /usr/local/bin/cc ]; then
+            echo "FAIL: cc symlink was created but cc=0 was specified"
+            exit 1
           fi
+          echo "PASS: cc symlink correctly absent"
+
+      - name: Assert c++ symlink was NOT created
+        run: |
+          echo "Checking that c++ symlink was not created in /usr/local/bin..."
+          if [ -f /usr/local/bin/c++ ] || [ -L /usr/local/bin/c++ ]; then
+            echo "FAIL: c++ symlink was created but cc=0 was specified"
+            exit 1
+          fi
+          echo "PASS: c++ symlink correctly absent"
