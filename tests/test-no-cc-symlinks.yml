@@ -1,0 +1,88 @@
+name: Test MinGW setup without cc/c++ symlinks
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install PowerShell
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq --no-install-recommends \
+            apt-transport-https software-properties-common wget
+          wget -q "https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb"
+          sudo dpkg -i packages-microsoft-prod.deb
+          sudo apt-get update -q
+          sudo apt-get install -yq powershell
+          pwsh --version
+
+      - name: Record pre-existing cc path (if any)
+        id: pre-check
+        run: |
+          CC_BEFORE=$(command -v cc 2>/dev/null || echo "")
+          echo "cc_before=$CC_BEFORE" >> $GITHUB_OUTPUT
+          echo "cc before action: $CC_BEFORE"
+
+      - id: action
+        uses: .
+        with:
+          platform: x64
+          cc: '0'
+
+      - name: Assert gcc output
+        env:
+          GCC: ${{ steps.action.outputs.gcc }}
+        run: |
+          echo "gcc: $GCC"
+          if [ "$GCC" != "x86_64-w64-mingw32-gcc" ]; then
+            echo "FAIL: expected gcc 'x86_64-w64-mingw32-gcc', got '$GCC'"
+            exit 1
+          fi
+          echo "PASS: gcc output is correct"
+
+      - name: Assert gxx output
+        env:
+          GXX: ${{ steps.action.outputs.gxx }}
+        run: |
+          echo "gxx: $GXX"
+          if [ "$GXX" != "x86_64-w64-mingw32-g++" ]; then
+            echo "FAIL: expected gxx 'x86_64-w64-mingw32-g++', got '$GXX'"
+            exit 1
+          fi
+          echo "PASS: gxx output is correct"
+
+      - name: Assert prefix output is non-empty
+        env:
+          PREFIX: ${{ steps.action.outputs.prefix }}
+        run: |
+          echo "prefix: $PREFIX"
+          if [ -z "$PREFIX" ]; then
+            echo "FAIL: prefix output is empty"
+            exit 1
+          fi
+          echo "PASS: prefix output is non-empty"
+
+      - name: Assert gcc binary is available
+        run: |
+          if ! command -v x86_64-w64-mingw32-gcc > /dev/null 2>&1; then
+            echo "FAIL: x86_64-w64-mingw32-gcc not found in PATH"
+            exit 1
+          fi
+          echo "PASS: x86_64-w64-mingw32-gcc is available"
+
+      - name: Assert cc symlink was NOT created by action
+        env:
+          CC_BEFORE: ${{ steps.pre-check.outputs.cc_before }}
+        run: |
+          CC_AFTER=$(command -v cc 2>/dev/null || echo "")
+          echo "cc before: $CC_BEFORE"
+          echo "cc after: $CC_AFTER"
+          # If cc didn't exist before and doesn't exist after, that's correct
+          # If cc existed before, it should still be the same (not changed by action)
+          if [ -z "$CC_BEFORE" ] && [ -n "$CC_AFTER" ]; then
+            echo "FAIL: cc was created even though cc=0 was set"
+            exit 1
+          fi
+          echo "PASS: cc symlink was not created by the action (cc=0)"

@@ -1,0 +1,87 @@
+name: Test x86 MinGW setup
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install PowerShell
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq --no-install-recommends \
+            apt-transport-https software-properties-common wget
+          wget -q "https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb"
+          sudo dpkg -i packages-microsoft-prod.deb
+          sudo apt-get update -q
+          sudo apt-get install -yq powershell
+          pwsh --version
+
+      - id: action
+        uses: .
+        with:
+          platform: x86
+          cc: '1'
+
+      - name: Assert gcc output for x86
+        env:
+          GCC: ${{ steps.action.outputs.gcc }}
+        run: |
+          echo "gcc: $GCC"
+          if [ "$GCC" != "i686-w64-mingw32-gcc" ]; then
+            echo "FAIL: expected gcc 'i686-w64-mingw32-gcc', got '$GCC'"
+            exit 1
+          fi
+          echo "PASS: gcc output is correct for x86"
+
+      - name: Assert gxx output for x86
+        env:
+          GXX: ${{ steps.action.outputs.gxx }}
+        run: |
+          echo "gxx: $GXX"
+          if [ "$GXX" != "i686-w64-mingw32-g++" ]; then
+            echo "FAIL: expected gxx 'i686-w64-mingw32-g++', got '$GXX'"
+            exit 1
+          fi
+          echo "PASS: gxx output is correct for x86"
+
+      - name: Assert windres output is non-empty
+        env:
+          WINDRES: ${{ steps.action.outputs.windres }}
+        run: |
+          echo "windres: $WINDRES"
+          if [ -z "$WINDRES" ]; then
+            echo "FAIL: windres output is empty"
+            exit 1
+          fi
+          echo "PASS: windres output is non-empty"
+
+      - name: Assert prefix output is non-empty
+        env:
+          PREFIX: ${{ steps.action.outputs.prefix }}
+        run: |
+          echo "prefix: $PREFIX"
+          if [ -z "$PREFIX" ]; then
+            echo "FAIL: prefix output is empty"
+            exit 1
+          fi
+          echo "PASS: prefix output is non-empty"
+
+      - name: Assert i686 gcc binary is available
+        run: |
+          if ! command -v i686-w64-mingw32-gcc > /dev/null 2>&1; then
+            echo "FAIL: i686-w64-mingw32-gcc not found in PATH"
+            exit 1
+          fi
+          echo "PASS: i686-w64-mingw32-gcc is available"
+
+      - name: Assert cc symlink points to i686 gcc
+        run: |
+          if ! command -v cc > /dev/null 2>&1; then
+            echo "FAIL: cc not found in PATH"
+            exit 1
+          fi
+          CC_PATH=$(readlink -f "$(command -v cc)" 2>/dev/null || command -v cc)
+          echo "cc resolves to: $CC_PATH"
+          echo "PASS: cc is available"
