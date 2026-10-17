@@ -13,6 +13,7 @@ Hardened by [Chainguard](https://www.chainguard.dev) from the upstream action at
 | v3 | [`v3`](https://github.com/chainguard-actions/egor-tensin-setup-mingw/tree/v3) | [`41b837e`](https://github.com/egor-tensin/setup-mingw/commit/41b837e47d7f85214629d255b9c4bc3fcbe9fd63) |
 | v3.0 | [`v3.0`](https://github.com/chainguard-actions/egor-tensin-setup-mingw/tree/v3.0) | [`41b837e`](https://github.com/egor-tensin/setup-mingw/commit/41b837e47d7f85214629d255b9c4bc3fcbe9fd63) |
 | v3.0.1 | [`v3.0.1`](https://github.com/chainguard-actions/egor-tensin-setup-mingw/tree/v3.0.1) | [`d91d2ce`](https://github.com/egor-tensin/setup-mingw/commit/d91d2cec65b85c41ff111ebeb6991a822d069770) |
+| v3.0.2 | [`v3.0.2`](https://github.com/chainguard-actions/egor-tensin-setup-mingw/tree/v3.0.2) | [`0166e04`](https://github.com/egor-tensin/setup-mingw/commit/0166e04c923b6fd913d4f70e1d15c7082af28675) |
 
 ## Privacy
 
