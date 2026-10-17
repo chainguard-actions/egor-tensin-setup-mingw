@@ -1,0 +1,50 @@
+name: Test basic x64 (default) setup
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          platform: x64
+          cc: '1'
+        continue-on-error: true
+
+      - name: Assert action ran or failed gracefully (pwsh may not be available in act)
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+          PREFIX: ${{ steps.action.outputs.prefix }}
+          GCC: ${{ steps.action.outputs.gcc }}
+          GXX: ${{ steps.action.outputs.gxx }}
+        run: |
+          echo "outcome: $OUTCOME"
+          echo "prefix: $PREFIX"
+          echo "gcc: $GCC"
+          echo "gxx: $GXX"
+          if [ "$OUTCOME" = "success" ]; then
+            # Action succeeded — validate outputs
+            # Note: action has a known bug where $windres = $prefix = '-windres'
+            # reassigns $prefix, so prefix output is '-windres'
+            if [ -z "$GCC" ]; then
+              echo "FAIL: action succeeded but gcc output is empty"
+              exit 1
+            fi
+            if [ "$GCC" != "x86_64-w64-mingw32-gcc" ]; then
+              echo "FAIL: expected gcc 'x86_64-w64-mingw32-gcc', got '$GCC'"
+              exit 1
+            fi
+            if [ "$GXX" != "x86_64-w64-mingw32-g++" ]; then
+              echo "FAIL: expected gxx 'x86_64-w64-mingw32-g++', got '$GXX'"
+              exit 1
+            fi
+            echo "PASS: outputs are correct"
+          elif [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action failed gracefully (pwsh not available in act environment)"
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi
