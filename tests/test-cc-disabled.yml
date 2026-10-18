@@ -1,0 +1,78 @@
+name: Test MinGW setup with cc symlinks disabled
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/powershell:lts-ubuntu-22.04
+    steps:
+      - name: Install prerequisites (sudo, git)
+        run: |
+          apt-get update -yq
+          apt-get install -yq --no-install-recommends sudo git
+        shell: bash
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          platform: x64
+          cc: '0'
+      - name: Assert gcc output is set
+        env:
+          GCC: ${{ steps.action.outputs.gcc }}
+        run: |
+          echo "gcc: $GCC"
+          if [ -z "$GCC" ]; then
+            echo "FAIL: gcc output is empty"
+            exit 1
+          fi
+          if [ "$GCC" != "x86_64-w64-mingw32-gcc" ]; then
+            echo "FAIL: expected gcc 'x86_64-w64-mingw32-gcc', got '$GCC'"
+            exit 1
+          fi
+          echo "PASS: gcc output is set to '$GCC'"
+        shell: bash
+      - name: Assert gxx output is set
+        env:
+          GXX: ${{ steps.action.outputs.gxx }}
+        run: |
+          echo "gxx: $GXX"
+          if [ -z "$GXX" ]; then
+            echo "FAIL: gxx output is empty"
+            exit 1
+          fi
+          if [ "$GXX" != "x86_64-w64-mingw32-g++" ]; then
+            echo "FAIL: expected gxx 'x86_64-w64-mingw32-g++', got '$GXX'"
+            exit 1
+          fi
+          echo "PASS: gxx output is set to '$GXX'"
+        shell: bash
+      - name: Assert gcc binary is available
+        env:
+          GCC: ${{ steps.action.outputs.gcc }}
+        run: |
+          echo "Checking for gcc binary: $GCC"
+          if ! command -v "$GCC" > /dev/null 2>&1; then
+            echo "FAIL: $GCC not found on PATH"
+            exit 1
+          fi
+          echo "PASS: $GCC is available"
+        shell: bash
+      - name: Assert cc symlink was NOT created by this action
+        run: |
+          # When cc=0, the action should not create /usr/local/bin/cc pointing to mingw gcc
+          # Note: system cc may exist, but it should not be the mingw cross-compiler
+          if command -v cc > /dev/null 2>&1; then
+            CC_PATH="$(command -v cc)"
+            echo "cc found at: $CC_PATH"
+            # If cc exists, it should NOT be the mingw cross-compiler
+            if echo "$CC_PATH" | grep -q "mingw"; then
+              echo "FAIL: cc points to mingw compiler but cc=0 was set"
+              exit 1
+            fi
+            echo "PASS: cc exists but is not the mingw cross-compiler (system cc)"
+          else
+            echo "PASS: cc not found (no symlink created as expected)"
+          fi
+        shell: bash

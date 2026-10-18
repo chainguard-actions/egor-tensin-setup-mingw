@@ -1,0 +1,69 @@
+name: Test basic x64 (default) MinGW setup
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/powershell:lts-ubuntu-22.04
+    steps:
+      - name: Install prerequisites (sudo, git)
+        run: |
+          apt-get update -yq
+          apt-get install -yq --no-install-recommends sudo git
+        shell: bash
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          platform: x64
+          cc: '1'
+      - name: Assert gcc output
+        env:
+          GCC: ${{ steps.action.outputs.gcc }}
+        run: |
+          echo "gcc: $GCC"
+          if [ "$GCC" != "x86_64-w64-mingw32-gcc" ]; then
+            echo "FAIL: expected gcc 'x86_64-w64-mingw32-gcc', got '$GCC'"
+            exit 1
+          fi
+          echo "PASS: gcc output is correct"
+        shell: bash
+      - name: Assert gxx output
+        env:
+          GXX: ${{ steps.action.outputs.gxx }}
+        run: |
+          echo "gxx: $GXX"
+          if [ "$GXX" != "x86_64-w64-mingw32-g++" ]; then
+            echo "FAIL: expected gxx 'x86_64-w64-mingw32-g++', got '$GXX'"
+            exit 1
+          fi
+          echo "PASS: gxx output is correct"
+        shell: bash
+      - name: Assert gcc binary exists on PATH
+        env:
+          GCC: ${{ steps.action.outputs.gcc }}
+        run: |
+          echo "Checking for gcc binary: $GCC"
+          if ! command -v "$GCC" > /dev/null 2>&1; then
+            echo "FAIL: $GCC not found on PATH"
+            exit 1
+          fi
+          echo "PASS: $GCC found at $(command -v $GCC)"
+        shell: bash
+      - name: Assert cc symlink exists
+        run: |
+          if ! command -v cc > /dev/null 2>&1; then
+            echo "FAIL: cc not found on PATH"
+            exit 1
+          fi
+          echo "PASS: cc found at $(command -v cc)"
+        shell: bash
+      - name: Assert c++ symlink exists
+        run: |
+          if ! command -v c++ > /dev/null 2>&1; then
+            echo "FAIL: c++ not found on PATH"
+            exit 1
+          fi
+          echo "PASS: c++ found at $(command -v c++)"
+        shell: bash
