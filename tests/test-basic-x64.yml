@@ -1,0 +1,88 @@
+name: Test basic x64 (default) usage
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install PowerShell
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq --no-install-recommends \
+            apt-transport-https software-properties-common wget
+          wget -q "https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb"
+          sudo dpkg -i packages-microsoft-prod.deb
+          sudo apt-get update -q
+          sudo apt-get install -yq powershell
+
+      - id: action
+        uses: .
+        with:
+          platform: x64
+          cc: '1'
+
+      - name: Assert prefix output
+        env:
+          PREFIX: ${{ steps.action.outputs.prefix }}
+        run: |
+          echo "prefix: $PREFIX"
+          if [ "$PREFIX" != "x86_64-w64-mingw32" ]; then
+            echo "FAIL: expected prefix 'x86_64-w64-mingw32', got '$PREFIX'"
+            exit 1
+          fi
+          echo "PASS: prefix is correct"
+
+      - name: Assert gcc output
+        env:
+          GCC: ${{ steps.action.outputs.gcc }}
+        run: |
+          echo "gcc: $GCC"
+          if [ "$GCC" != "x86_64-w64-mingw32-gcc" ]; then
+            echo "FAIL: expected gcc 'x86_64-w64-mingw32-gcc', got '$GCC'"
+            exit 1
+          fi
+          echo "PASS: gcc is correct"
+
+      - name: Assert gxx output
+        env:
+          GXX: ${{ steps.action.outputs.gxx }}
+        run: |
+          echo "gxx: $GXX"
+          if [ "$GXX" != "x86_64-w64-mingw32-g++" ]; then
+            echo "FAIL: expected gxx 'x86_64-w64-mingw32-g++', got '$GXX'"
+            exit 1
+          fi
+          echo "PASS: gxx is correct"
+
+      - name: Assert windres output
+        env:
+          WINDRES: ${{ steps.action.outputs.windres }}
+        run: |
+          echo "windres: $WINDRES"
+          if [ "$WINDRES" != "x86_64-w64-mingw32-windres" ]; then
+            echo "FAIL: expected windres 'x86_64-w64-mingw32-windres', got '$WINDRES'"
+            exit 1
+          fi
+          echo "PASS: windres is correct"
+
+      - name: Assert gcc binary is available on PATH
+        run: |
+          echo "Checking for x86_64-w64-mingw32-gcc on PATH..."
+          if ! command -v x86_64-w64-mingw32-gcc > /dev/null 2>&1; then
+            echo "FAIL: x86_64-w64-mingw32-gcc not found on PATH"
+            exit 1
+          fi
+          echo "PASS: x86_64-w64-mingw32-gcc is available"
+
+      - name: Assert cc symlink is set up
+        run: |
+          echo "Checking for cc symlink..."
+          if ! command -v cc > /dev/null 2>&1; then
+            echo "FAIL: cc not found on PATH"
+            exit 1
+          fi
+          CC_PATH="$(command -v cc)"
+          echo "cc resolves to: $CC_PATH"
+          echo "PASS: cc is available"
